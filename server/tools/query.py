@@ -10,6 +10,7 @@ logger = get_logger("pg-mcp.tools.query")
 def extract_table_names(sql_query: str) -> Set[tuple]:
     """
     Extract table names (schema, table) from a SQL query.
+    Handles both direct table references and information_schema queries.
     
     Returns:
         Set of tuples (schema_name, table_name). Schema defaults to 'public' if not specified.
@@ -19,17 +20,64 @@ def extract_table_names(sql_query: str) -> Set[tuple]:
         ast = parse_one(sql_query, dialect="postgres")
         if not ast:
             return tables
-            
-        # Find all Table expressions in the AST
+        
+        # Check if this is an information_schema query
+        is_information_schema = False
         for node in ast.walk():
             if isinstance(node, exp.Table):
-                # In sqlglot, for PostgreSQL: schema.table format
-                # node.db is the schema (or database), node.name is the table
-                # If schema is not specified, it defaults to 'public'
-                schema = node.db if node.db else 'public'
-                table = node.name
-                if table:  # Only add if we have a table name
-                    tables.add((schema, table))
+                table_name = node.name.lower() if node.name else ""
+                schema = node.db.lower() if node.db else ""
+                if "information_schema" in schema or "information_schema" in table_name:
+                    is_information_schema = True
+                    break
+        
+        # If it's an information_schema query, extract table names from WHERE clause
+        if is_information_schema:
+            table_schema = 'public'  # default
+            table_name = None
+            
+            # Walk the AST to find WHERE conditions
+            for node in ast.walk():
+                if isinstance(node, exp.EQ):
+                    # Check for table_schema = 'value' or table_name = 'value'
+                    left = node.left
+                    right = node.right
+                    
+                    if isinstance(left, exp.Column):
+                        col_name = left.name.lower() if left.name else ""
+                        # Handle different literal types
+                        if isinstance(right, exp.Literal):
+                            # Get the literal value
+                            value = right.this
+                            # Convert to string and remove quotes if present
+                            if value is not None:
+                                value = str(value).strip("'\"")
+                                
+                                if col_name == "table_schema":
+                                    table_schema = value
+                                elif col_name == "table_name":
+                                    table_name = value
+                        elif isinstance(right, exp.Identifier):
+                            # Handle unquoted identifiers
+                            value = right.name if hasattr(right, 'name') else str(right)
+                            if col_name == "table_schema":
+                                table_schema = value
+                            elif col_name == "table_name":
+                                table_name = value
+            
+            if table_name:
+                tables.add((table_schema, table_name))
+        else:
+            # Regular query - extract table names from FROM/JOIN clauses
+            for node in ast.walk():
+                if isinstance(node, exp.Table):
+                    # In sqlglot, for PostgreSQL: schema.table format
+                    # node.db is the schema (or database), node.name is the table
+                    # If schema is not specified, it defaults to 'public'
+                    schema = node.db if node.db else 'public'
+                    table = node.name
+                    if table and table.lower() not in ['information_schema', 'pg_catalog']:
+                        tables.add((schema, table))
     except Exception as e:
         logger.debug(f"Could not parse SQL to extract table names: {e}")
         # If parsing fails, the query will still execute but without metadata
