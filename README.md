@@ -57,14 +57,44 @@ Additional extensions can be easily added via YAML config files.
 
 ### Prerequisites
 
-- Python 3.13+
+- Python 3.13+ (for manual installation)
 - PostgreSQL database(s)
+- Docker (for Docker installation)
 
-### Using Docker
+### Using Docker (Recommended)
+
+#### Option 1: Pull from GitHub Container Registry
+
+```bash
+# Pull the latest image from GitHub Container Registry
+docker pull ghcr.io/growthspace-engineering/pg-mcp-server:latest
+
+# Run the container
+docker run -d \
+  --name pg-mcp \
+  -p 8000:8000 \
+  -e LOG_LEVEL=DEBUG \
+  ghcr.io/growthspace-engineering/pg-mcp-server:latest
+```
+
+Or use a specific version:
+
+```bash
+docker pull ghcr.io/growthspace-engineering/pg-mcp-server:0.1.0
+docker run -d --name pg-mcp -p 8000:8000 ghcr.io/growthspace-engineering/pg-mcp-server:0.1.0
+```
+
+**Note**: If the package is private, you'll need to authenticate with GitHub Container Registry first:
+
+```bash
+echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+```
+
+#### Option 2: Build from Source with Docker Compose
 
 ```bash
 # Clone the repository
-git clone https://github.com/stuzero/pg-mcp-server.git
+git clone https://github.com/growthspace-engineering/pg-mcp-server.git
 cd pg-mcp-server
 
 # Build and run with Docker Compose
@@ -75,7 +105,7 @@ docker-compose up -d
 
 ```bash
 # Clone the repository
-git clone https://github.com/stuzero/pg-mcp-server.git
+git clone https://github.com/growthspace-engineering/pg-mcp-server.git
 cd pg-mcp-server
 
 # Install dependencies and create a virtual environment ( .venv )
