@@ -99,18 +99,33 @@ async def get_table_comments(conn, schema: str, table: str) -> Dict[str, Any]:
     }
     
     try:
-        # Get table comment
-        table_comment_query = """
-            SELECT obj_description(c.oid, 'pg_class') as comment
+        # First verify the table exists
+        table_exists_query = """
+            SELECT c.oid
             FROM pg_catalog.pg_class c
             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = $1 AND c.relname = $2
+            WHERE n.nspname = $1 AND c.relname = $2 AND c.relkind = 'r'
+        """
+        table_oid = await conn.fetchval(table_exists_query, schema, table)
+        
+        if not table_oid:
+            logger.warning(f"Table {schema}.{table} not found or is not a regular table")
+            return result
+        
+        # Get table comment - use obj_description(oid) without second parameter
+        table_comment_query = """
+            SELECT obj_description(c.oid) as comment
+            FROM pg_catalog.pg_class c
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = $1 AND c.relname = $2 AND c.relkind = 'r'
         """
         table_comment = await conn.fetchval(table_comment_query, schema, table)
         if table_comment:
             result["table_comment"] = table_comment
+        else:
+            logger.debug(f"No table comment found for {schema}.{table}")
         
-        # Get column comments
+        # Get column comments - ensure we're querying a regular table
         column_comments_query = """
             SELECT 
                 a.attname AS column_name,
@@ -120,16 +135,25 @@ async def get_table_comments(conn, schema: str, table: str) -> Dict[str, Any]:
             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = $1 
               AND c.relname = $2
+              AND c.relkind = 'r'
               AND a.attnum > 0
               AND NOT a.attisdropped
             ORDER BY a.attnum
         """
         column_rows = await conn.fetch(column_comments_query, schema, table)
+        comment_count = 0
         for row in column_rows:
             if row['comment']:
                 result["columns"][row['column_name']] = row['comment']
+                comment_count += 1
+        
+        if comment_count == 0:
+            logger.debug(f"No column comments found for {schema}.{table} (checked {len(column_rows)} columns)")
+        else:
+            logger.debug(f"Found {comment_count} column comments for {schema}.{table}")
+            
     except Exception as e:
-        logger.debug(f"Error fetching comments for {schema}.{table}: {e}")
+        logger.warning(f"Error fetching comments for {schema}.{table}: {e}", exc_info=True)
     
     return result
 
@@ -141,10 +165,13 @@ async def get_query_metadata(conn, sql_query: str) -> Dict[str, Any]:
         Dictionary mapping "schema.table" -> {table_comment, columns: {col_name: comment}}
     """
     tables = extract_table_names(sql_query)
+    logger.debug(f"Extracted tables from query: {tables}")
+    
     metadata = {}
     
     for schema, table in tables:
         key = f"{schema}.{table}"
+        logger.debug(f"Fetching comments for {key}")
         metadata[key] = await get_table_comments(conn, schema, table)
     
     return metadata
