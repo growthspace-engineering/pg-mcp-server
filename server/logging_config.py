@@ -110,7 +110,7 @@ class MCPLogFormatter(logging.Formatter):
         # Format using the base formatter
         return super().format(record)
 
-def configure_logging(level="INFO", log_file=None):
+def configure_logging(level="INFO", log_file=None, use_stderr=False):
     """
     Configure logging with Rich formatting for the terminal
     and regular formatting for log files.
@@ -118,6 +118,7 @@ def configure_logging(level="INFO", log_file=None):
     Args:
         level: The log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_file: Optional path to a log file
+        use_stderr: If True, write logs to stderr instead of stdout (required for stdio mode)
     """
     # Get log level from environment if available
     env_level = os.environ.get("LOG_LEVEL", level)
@@ -132,7 +133,12 @@ def configure_logging(level="INFO", log_file=None):
         root_logger.removeHandler(handler)
     
     # Create Rich console with custom highlighting
-    console = Console(theme=custom_theme, highlighter=MCPHighlighter())
+    # In stdio mode, we must use stderr to avoid interfering with JSON-RPC on stdout
+    console = Console(
+        theme=custom_theme, 
+        highlighter=MCPHighlighter(),
+        file=sys.stderr if use_stderr else sys.stdout
+    )
     
     # Rich handler for console output
     rich_handler = RichHandler(
