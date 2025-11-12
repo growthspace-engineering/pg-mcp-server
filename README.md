@@ -11,7 +11,7 @@ PG-MCP is a server implementation of the [Model Context Protocol](https://modelc
 
 This implementation builds upon and extends the [reference Postgres MCP implementation](https://github.com/modelcontextprotocol/servers/tree/main/src/postgres) with several key enhancements:
 
-1. **Full Server Implementation**: Built as a complete server with SSE transport for production use
+1. **Dual Transport Support**: Supports both SSE (Server-Sent Events) for server mode and stdio for local development
 2. **Multi-database Support**: Connect to multiple PostgreSQL databases simultaneously
 3. **Rich Catalog Information**: Extracts and exposes table/column descriptions from the database catalog
 4. **Extension Context**: Provides detailed YAML-based knowledge about PostgreSQL extensions like PostGIS and pgvector
@@ -114,8 +114,39 @@ uv sync
 # Activate the virtual environment
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Run the server
+# Run the server (SSE mode)
 python -m server.app
+
+# Or run in stdio mode
+python -m server.stdio
+```
+
+### Using with Cursor (Stdio Mode - Recommended)
+
+For local development with Cursor, you can use stdio mode which doesn't require Docker or a separate server process. See [CURSOR_SETUP.md](CURSOR_SETUP.md) for detailed instructions.
+
+Quick setup:
+1. Install `uv` if you don't have it: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+2. Add to your `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "pg-mcp-server": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/growthspace-engineering/pg-mcp-server.git",
+        "python",
+        "-m",
+        "server.stdio"
+      ],
+      "env": {
+        "LOG_LEVEL": "DEBUG"
+      }
+    }
+  }
+}
 ```
 
 ## Usage
