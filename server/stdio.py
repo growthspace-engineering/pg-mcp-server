@@ -10,8 +10,10 @@ import os
 from server.logging_config import configure_logging, get_logger
 
 # Configure logging first thing to capture all subsequent log messages
+# IMPORTANT: In stdio mode, logs must go to stderr, not stdout, because stdout
+# is reserved for JSON-RPC protocol messages
 log_level = os.environ.get("LOG_LEVEL", "DEBUG")
-configure_logging(level=log_level)
+configure_logging(level=log_level, use_stderr=True)
 logger = get_logger("stdio")
 
 # Import MCP instance and register everything
